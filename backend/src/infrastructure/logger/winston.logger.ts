@@ -1,4 +1,4 @@
-import { createLogger, format, transports, Logger } from 'winston';
+import { createLogger, format, transports, LoggerOptions } from 'winston';
 
 const { combine, timestamp, json, colorize, printf, errors } = format;
 
@@ -16,10 +16,9 @@ const devFormat = combine(
 
 const prodFormat = combine(timestamp(), errors({ stack: true }), json());
 
-export function createWinstonLogger(): Logger {
+function buildOptions(): LoggerOptions {
   const isDev = process.env.NODE_ENV !== 'production';
-
-  return createLogger({
+  return {
     level: isDev ? 'debug' : 'info',
     format: isDev ? devFormat : prodFormat,
     transports: [
@@ -31,7 +30,13 @@ export function createWinstonLogger(): Logger {
             new transports.File({ filename: 'logs/combined.log' }),
           ]),
     ],
-  });
+  };
+}
+
+export const winstonLoggerOptions = buildOptions();
+
+export function createWinstonLogger() {
+  return createLogger(winstonLoggerOptions);
 }
 
 export const winstonLogger = createWinstonLogger();
