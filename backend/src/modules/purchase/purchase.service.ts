@@ -1,39 +1,31 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject } from '@nestjs/common';
+import { UserPackageStatus, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { TransactionType, TransactionStatus, UserPackageStatus } from '@prisma/client';
+import { IPackageRepository } from '../../domain/interfaces/package.repository.interface';
+import { INJECTION_TOKENS } from '../../common/constants/injection-tokens';
+import { TransactionFactory } from '../../domain/factories/transaction.factory';
 import { PurchaseDto } from './dto/purchase.dto';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class PurchaseService {
   private readonly logger = new Logger(PurchaseService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(INJECTION_TOKENS.PACKAGE_REPOSITORY)
+    private readonly packageRepo: IPackageRepository,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async purchasePackage(userId: string, dto: PurchaseDto) {
-    const pkg = await this.prisma.package.findFirst({
-      where: { id: dto.packageId, isActive: true, deletedAt: null },
-      include: { packageFeatures: { include: { feature: true } } },
-    });
-
+    const pkg = await this.packageRepo.findActiveById(dto.packageId);
     if (!pkg) {
       throw new NotFoundException('Package not found or is no longer available');
     }
 
-    const alreadyOwned = await this.prisma.userPackage.findFirst({
-      where: { userId, packageId: pkg.id, status: UserPackageStatus.ACTIVE },
-    });
-
+    const alreadyOwned = await this.packageRepo.findUserActivePackage(userId, pkg.id);
     if (alreadyOwned) {
       throw new BadRequestException('You already own this package');
     }
-
-    const referenceId = `purchase-${userId}-${pkg.id}-${uuidv4()}`;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: userId } });
@@ -45,36 +37,28 @@ export class PurchaseService {
       });
 
       const userPackage = await tx.userPackage.create({
-        data: {
-          userId,
-          packageId: pkg.id,
-          status: UserPackageStatus.ACTIVE,
-        },
+        data: { userId, packageId: pkg.id, status: UserPackageStatus.ACTIVE },
       });
 
-      const transaction = await tx.transaction.create({
-        data: {
-          userId,
-          packageId: pkg.id,
-          amount: pkg.creditAmount,
-          transactionType: TransactionType.CREDIT_IN,
-          status: TransactionStatus.COMPLETED,
-          description: `Purchased package: ${pkg.name}`,
-          balanceBefore: user.currentCredits,
-          balanceAfter: updatedUser.currentCredits,
-          referenceId,
-        },
+      const txData = TransactionFactory.build({
+        userId,
+        type: TransactionType.CREDIT_IN,
+        amount: pkg.creditAmount,
+        currentBalance: user.currentCredits,
+        packageId: pkg.id,
+        description: `Purchased package: ${pkg.name}`,
+        contextId: pkg.id,
       });
 
-      return { updatedUser, userPackage, transaction, pkg };
+      const transaction = await tx.transaction.create({ data: txData });
+
+      return { updatedUser, userPackage, transaction };
     });
 
-    this.logger.log(
-      `User ${userId} purchased '${pkg.name}' — +${pkg.creditAmount} credits`,
-    );
+    this.logger.log(`User ${userId} purchased '${pkg.name}' — +${pkg.creditAmount} credits`);
 
     return {
-      message: `Successfully purchased the ${result.pkg.name} package`,
+      message: `Successfully purchased the ${pkg.name} package`,
       creditsAdded: pkg.creditAmount,
       newBalance: result.updatedUser.currentCredits,
       transaction: result.transaction,
