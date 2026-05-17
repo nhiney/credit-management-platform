@@ -1,0 +1,68 @@
+@startuml Sequence_Purchase
+title Sequence: Package Purchase (ACID Transaction)
+
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 8
+
+actor "End User" as User
+participant "PurchaseController\n/api/purchase" as Ctrl
+participant "PurchaseService" as Svc
+participant "PackageRepository" as PkgRepo
+participant "TransactionFactory" as Factory
+participant "Prisma $transaction" as TX
+participant "WinstonLogger" as Logger
+database "PostgreSQL" as DB
+
+User -> Ctrl : POST /api/purchase\n{ packageId: "uuid" }
+
+Ctrl -> Svc : purchasePackage(userId, dto)
+
+Svc -> PkgRepo : findActiveById(packageId)
+PkgRepo -> DB : SELECT * FROM packages\nWHERE id=? AND is_active=true AND deleted_at IS NULL
+DB --> PkgRepo : Package or null
+
+alt Package not found
+    Svc --> Ctrl : throw NotFoundException (404)
+    Ctrl --> User : 404 Not Found
+end
+
+Svc -> PkgRepo : findUserActivePackage(userId, packageId)
+PkgRepo -> DB : SELECT * FROM user_packages\nWHERE user_id=? AND package_id=? AND status=ACTIVE
+DB --> PkgRepo : UserPackage or null
+
+alt Already owns package
+    Svc --> Ctrl : throw BadRequestException (400)
+    Ctrl --> User : 400 Bad Request — "Already owned"
+end
+
+' ── ACID Transaction ──────────────────────────────────────────────────
+Svc -> TX : prisma.$transaction(async (tx) => {...})
+activate TX #LightYellow
+note over TX : BEGIN TRANSACTION
+
+TX -> DB : SELECT current_credits FROM users WHERE id=? FOR UPDATE
+DB --> TX : currentBalance
+
+TX -> DB : UPDATE users SET current_credits += package.creditAmount\nWHERE id=? RETURNING current_credits
+DB --> TX : newBalance
+
+TX -> DB : INSERT INTO user_packages\n(user_id, package_id, status=ACTIVE)
+DB --> TX : UserPackage record
+
+TX -> Factory : build(userId, packageId, amount=creditAmount,\ntype=CREDIT_IN, balanceBefore, balanceAfter, referenceId)
+Factory --> TX : TransactionCreateInput
+
+TX -> DB : INSERT INTO transactions (...) VALUES (...)
+DB --> TX : Transaction record
+
+note over TX : COMMIT
+deactivate TX
+
+TX --> Svc : { updatedUser, userPackage, transaction }
+
+Svc -> Logger : log('purchase.completed', { userId, packageId,\ncreditsAdded, newBalance, correlationId })
+
+Svc --> Ctrl : PurchaseResultDto
+Ctrl --> User : 201 Created\n{ message, creditsAdded, newBalance, transaction }
+
+@enduml
