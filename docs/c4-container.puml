@@ -1,38 +1,28 @@
 @startuml C4_Container
 !include <C4/C4_Container.puml>
 
-LAYOUT_WITH_LEGEND()
-
 title [C4 - Level 2] Container Diagram: CreditFlow Platform
 
-Person(endUser, "End User", "")
-Person(admin, "Platform Admin", "")
+Person(endUser, "End User", "SaaS customer who purchases credit packages and consumes AI features")
+Person(admin, "Platform Admin", "Manages packages, monitors transactions, administers the system")
 
 System_Boundary(platform, "CreditFlow Platform") {
-
-    Container(nginx, "Nginx", "Nginx Alpine",
-        "Reverse proxy and static file server.\nServes the React SPA and routes\nall /api/* requests to the backend.")
-
-    Container(spa, "React SPA", "React 18, Vite 5, TailwindCSS",
-        "Single-page application.\nProvides Dashboard (credit balance,\ntransaction history) and Package Store.\nCommunicates via Axios with JWT auth.")
-
-    Container(api, "NestJS API", "NestJS 10, TypeScript, Passport JWT",
-        "RESTful API built on Clean Architecture.\n- Helmet, CORS, Rate Limiting (security)\n- Winston structured JSON logging + Correlation IDs\n- ACID credit transactions via Prisma transaction\n- Custom RBAC guard: RequireFeatureGuard\n- Repository, Factory, Strategy patterns")
-
-    ContainerDb(db, "PostgreSQL 16", "PostgreSQL",
-        "Primary relational data store.\nHolds users, packages, features,\ntransactions, and user-package\nsubscriptions with full audit trail.")
+    Container(nginx, "Nginx", "Nginx Alpine", "Reverse proxy and static file server. Serves the React SPA and routes /api/* to backend.")
+    Container(spa, "React SPA", "React 18, Vite 5, TailwindCSS", "Dashboard (credit balance, transaction history) and Package Store. Communicates via Axios with JWT auth.")
+    Container(api, "NestJS API", "NestJS 10, TypeScript, Passport JWT", "REST API on Clean Architecture. Helmet, CORS, Rate Limiting, Winston logging, ACID transactions, RBAC guard.")
+    ContainerDb(db, "PostgreSQL 16", "PostgreSQL", "Stores users, packages, features, transactions, and user-package subscriptions with full audit trail.")
 }
 
-System_Ext(aiProvider, "AI Provider (Mock)", "")
-System_Ext(emailService, "Email Service", "")
+System_Ext(aiProvider, "AI Provider (Mock)", "External AI service for image generation and content automation. Access gated by RequireFeatureGuard.")
+System_Ext(emailService, "Email Service", "Transactional email delivery for registration and purchase notifications.")
 
 Rel(endUser, nginx, "Uses", "HTTPS :5173")
 Rel(admin, nginx, "Uses", "HTTPS :5173")
-Rel(nginx, spa, "Serves static files", "")
+Rel(nginx, spa, "Serves static files")
 Rel(spa, api, "API requests", "HTTPS /api/*")
 Rel(nginx, api, "Proxies /api/*", "HTTP :3000")
 Rel(api, db, "Reads / Writes", "Prisma ORM, TCP :5432")
-Rel(api, aiProvider, "Delegates AI tasks post credit-check", "HTTPS")
+Rel(api, aiProvider, "Delegates AI tasks after credit check", "HTTPS")
 Rel(api, emailService, "Sends notifications", "SMTP")
 
 @enduml

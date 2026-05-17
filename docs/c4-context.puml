@@ -1,27 +1,19 @@
 @startuml C4_Context
 !include <C4/C4_Context.puml>
 
-LAYOUT_WITH_LEGEND()
-
 title [C4 - Level 1] System Context: CreditFlow Platform
 
-' ── Actors ───────────────────────────────────────────────────────────────────
-Person(endUser, "End User", "A SaaS customer who purchases\ncredit packages and consumes\nAI-powered features.")
+Person(endUser, "End User", "A SaaS customer who purchases credit packages and consumes AI-powered features.")
+Person(admin, "Platform Admin", "Manages packages, monitors transactions, and administers the system.")
 
-Person(admin, "Platform Admin", "Manages packages, monitors\ntransactions, and administers\nthe system.")
+System(creditFlow, "CreditFlow Platform", "A SaaS credit management system. Users purchase credit packages to unlock and consume AI features. Every debit/credit is logged atomically.")
 
-' ── System under focus ───────────────────────────────────────────────────────
-System(creditFlow, "CreditFlow Platform", "A SaaS credit management system.\nUsers purchase credit packages to\nunlock and consume AI features.\nEvery debit/credit is logged atomically.")
+System_Ext(aiProvider, "AI Provider (Mock)", "External AI service for image generation and content automation. Access is gated by the RBAC guard.")
+System_Ext(emailService, "Email Service", "Transactional email delivery for registration confirmations and purchase receipts.")
 
-' ── External systems ─────────────────────────────────────────────────────────
-System_Ext(aiProvider, "AI Provider (Mock)", "External AI service for image\ngeneration and content automation.\nAccess is gated by the RBAC guard.")
-
-System_Ext(emailService, "Email Service", "Transactional email delivery\n(registration confirmations,\npurchase receipts).")
-
-' ── Relationships ─────────────────────────────────────────────────────────────
-Rel(endUser, creditFlow, "Purchases packages,\nuses AI features,\nviews transaction history", "HTTPS")
-Rel(admin, creditFlow, "Manages packages,\nviews all transactions,\nadmin operations", "HTTPS")
-Rel(creditFlow, aiProvider, "Delegates AI tasks after\ncredit verification", "HTTPS / REST")
-Rel(creditFlow, emailService, "Sends transactional\nnotifications", "SMTP / TLS")
+Rel(endUser, creditFlow, "Purchases packages, uses AI features, views transaction history", "HTTPS")
+Rel(admin, creditFlow, "Manages packages, views all transactions, admin operations", "HTTPS")
+Rel(creditFlow, aiProvider, "Delegates AI tasks after credit verification", "HTTPS / REST")
+Rel(creditFlow, emailService, "Sends transactional notifications", "SMTP / TLS")
 
 @enduml
