@@ -106,6 +106,8 @@ model UserPackage {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   package Package @relation(fields: [packageId], references: [id], onDelete: Restrict)
 
+  // DB-level guard: a user can own the same package only once
+  @@unique([userId, packageId])
   @@index([userId])
   @@index([userId, status])
   @@map("user_packages")
