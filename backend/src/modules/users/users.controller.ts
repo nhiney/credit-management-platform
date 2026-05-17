@@ -1,5 +1,5 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { UsersService } from './users.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -23,9 +23,11 @@ export class UsersController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'List all users (Admin only)' })
-  @ApiResponse({ status: 200, description: 'List of users' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  @ApiResponse({ status: 200, description: 'Paginated list of users' })
   @ApiResponse({ status: 403, description: 'Forbidden — admin only' })
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query('page') page = 1, @Query('limit') limit = 50) {
+    return this.usersService.findAll(+page, +limit);
   }
 }
