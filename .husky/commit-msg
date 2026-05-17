@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+
+npx --no -- commitlint --edit "$1"
+COMMITLINT_EXIT=$?
+if [ $COMMITLINT_EXIT -ne 0 ]; then
+  echo ""
+  echo "❌ Commit message does not follow Conventional Commits format."
+  echo ""
+  echo "   Valid format:  <type>(<scope>): <subject>"
+  echo "   Example:       feat(auth): add jwt refresh token endpoint"
+  echo ""
+  echo "   Types: feat | fix | docs | style | refactor | test | chore | perf | ci | revert"
+  exit 1
+fi

@@ -1,14 +1,28 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
+  // ── Security headers ───────────────────────────────────────────────────────
+  app.use(helmet());
+
+  // ── CORS (lock down in production) ────────────────────────────────────────
+  app.enableCors({
+    origin: process.env.FRONTEND_URL ?? '*',
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-correlation-id'],
+  });
 
   app.setGlobalPrefix('api');
 
+  // ── Request validation ────────────────────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -18,17 +32,17 @@ async function bootstrap() {
     }),
   );
 
+  // ── Global error handler ──────────────────────────────────────────────────
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  app.enableCors({
-    origin: process.env.FRONTEND_URL || '*',
-    credentials: true,
-  });
+  // ── Request/response logging with correlation IDs ─────────────────────────
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
+  // ── Swagger ───────────────────────────────────────────────────────────────
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Credit Management Platform')
     .setDescription(
-      'Enterprise-grade credit management API with RBAC and transaction tracking',
+      'Enterprise-grade credit management API with RBAC, ACID transactions, and structured logging.',
     )
     .setVersion('1.0.0')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
@@ -48,8 +62,11 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
 
+  // eslint-disable-next-line no-console
   console.log(`🚀  API running at  http://localhost:${port}/api`);
+  // eslint-disable-next-line no-console
   console.log(`📚  Swagger docs    http://localhost:${port}/api/docs`);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-floating-promises
 bootstrap();

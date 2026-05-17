@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+
+echo "🔍 Running pre-commit checks..."
+
+# Run lint-staged (ESLint + Prettier on staged files)
+npx lint-staged
+LINT_EXIT=$?
+if [ $LINT_EXIT -ne 0 ]; then
+  echo "❌ Lint-staged failed. Fix the errors above before committing."
+  exit 1
+fi
+
+# Run backend unit tests (fast — no e2e, no database)
+echo "🧪 Running unit tests..."
+cd backend && npm run test:unit -- --passWithNoTests --forceExit
+TEST_EXIT=$?
+if [ $TEST_EXIT -ne 0 ]; then
+  echo "❌ Unit tests failed. Fix failing tests before committing."
+  exit 1
+fi
+
+echo "✅ All pre-commit checks passed."

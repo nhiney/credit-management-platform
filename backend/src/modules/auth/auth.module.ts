@@ -4,6 +4,8 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { UserRepository } from '../../infrastructure/database/repositories/user.repository';
+import { INJECTION_TOKENS } from '../../common/constants/injection-tokens';
 
 @Module({
   imports: [
@@ -13,8 +15,12 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN ?? '7d' },
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    { provide: INJECTION_TOKENS.USER_REPOSITORY, useClass: UserRepository },
+  ],
   controllers: [AuthController],
-  exports: [JwtModule],
+  exports: [JwtModule, { provide: INJECTION_TOKENS.USER_REPOSITORY, useClass: UserRepository }],
 })
 export class AuthModule {}

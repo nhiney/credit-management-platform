@@ -1,0 +1,31 @@
+{
+  "name": "credit-management-platform",
+  "version": "1.0.0",
+  "description": "SaaS Credit Management Platform — Monorepo",
+  "author": "Nhi <nhiyen.engineer@gmail.com>",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "test:backend": "cd backend && npm run test",
+    "test:backend:coverage": "cd backend && npm run test:coverage",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd frontend && npm run lint",
+    "format:backend": "cd backend && npm run format",
+    "format:frontend": "cd frontend && npm run format"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^18.6.1",
+    "@commitlint/config-conventional": "^18.6.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  },
+  "lint-staged": {
+    "backend/src/**/*.ts": [
+      "backend/node_modules/.bin/eslint --fix --max-warnings=0",
+      "backend/node_modules/.bin/prettier --write"
+    ],
+    "frontend/src/**/*.{ts,tsx}": [
+      "frontend/node_modules/.bin/prettier --write"
+    ]
+  }
+}
