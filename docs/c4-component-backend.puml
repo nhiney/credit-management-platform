@@ -3,136 +3,127 @@
 
 LAYOUT_WITH_LEGEND()
 
-title [C4 — Level 3] Component Diagram: NestJS API
+title [C4 - Level 3] Component Diagram: NestJS API
 
 Container_Ext(spa, "React SPA", "", "")
 ContainerDb_Ext(db, "PostgreSQL", "", "")
 
 Container_Boundary(api, "NestJS API") {
 
-    ' ── Cross-cutting / Infrastructure ───────────────────────────────────────
+    ' Cross-cutting
     Component(correlationMw, "CorrelationIdMiddleware", "NestJS Middleware",
-        "Generates a unique X-Correlation-ID (UUID v4)\nper request. Propagates it via AsyncLocalStorage\nso every log line in the request lifecycle carries the same ID.")
+        "Generates UUID v4 per request.\nAttaches X-Correlation-ID to request and response.")
 
     Component(logInterceptor, "LoggingInterceptor", "NestJS Interceptor",
-        "Logs incoming method, path, status code, and\nlatency for every HTTP call.\nReads correlation ID from context.")
+        "Logs method, path, status, latency\nfor every HTTP call with correlation ID.")
 
     Component(exFilter, "HttpExceptionFilter", "NestJS Exception Filter",
-        "Catches all exceptions. Returns a standardized\nerror envelope: { success, statusCode, timestamp,\ncorrelationId, path, message }.")
+        "Returns standardized error envelope:\n{ success, statusCode, timestamp, path, message }.")
 
     Component(winstonLogger, "WinstonLogger", "Winston",
-        "Structured JSON logger injected across all services.\nTransports: Console (dev) + File (prod).\nIncludes correlationId, level, timestamp, context.")
+        "Structured JSON logger.\nConsole transport (dev), File transport (prod).")
 
-    ' ── Security Layer ────────────────────────────────────────────────────────
-    Component(jwtGuard, "JwtAuthGuard", "NestJS Guard — APP_GUARD",
-        "Validates Bearer JWT on every route.\nSkips routes decorated with @Public().")
+    ' Security
+    Component(jwtGuard, "JwtAuthGuard", "NestJS Guard - APP_GUARD",
+        "Validates Bearer JWT on every route.\nSkips routes with Public() decorator.")
 
     Component(rfGuard, "RequireFeatureGuard", "NestJS Guard",
-        "RBAC logic:\n1. Resolve @RequireFeature(code) metadata.\n2. Verify user has ACTIVE package with feature.\n3. Check currentCredits >= feature.creditCost.\n4. Deduct credits + log CREDIT_OUT atomically via\n   CreditDeductionStrategy inside $transaction.\nRejects with 403 or 422 on failure.")
+        "1. Resolve RequireFeature metadata.\n2. Check user has ACTIVE plan with feature.\n3. Check credits >= feature.creditCost.\n4. Atomic deduction via CreditDeductionStrategy.")
 
     Component(rolesGuard, "RolesGuard", "NestJS Guard",
-        "Checks @Roles(Role.ADMIN) metadata.\nEnforced on admin-only endpoints.")
+        "Checks Roles(ADMIN) metadata.\nEnforced on admin-only endpoints.")
 
-    ' ── Presentation Layer (Controllers) ─────────────────────────────────────
-    Component(authCtrl, "AuthController", "NestJS Controller · /api/auth",
-        "POST /register — create account\nPOST /login — return JWT")
+    ' Controllers
+    Component(authCtrl, "AuthController", "NestJS Controller - /api/auth",
+        "POST /register\nPOST /login")
 
-    Component(usersCtrl, "UsersController", "NestJS Controller · /api/users",
-        "GET /me — profile + active packages\nGET / — all users (Admin)")
+    Component(usersCtrl, "UsersController", "NestJS Controller - /api/users",
+        "GET /me - profile + active packages\nGET / - all users (Admin)")
 
-    Component(pkgCtrl, "PackagesController", "NestJS Controller · /api/packages",
-        "GET / — public list\nPOST, PATCH, DELETE — Admin CRUD")
+    Component(pkgCtrl, "PackagesController", "NestJS Controller - /api/packages",
+        "GET / - public list\nPOST, PATCH, DELETE - Admin CRUD")
 
-    Component(purchaseCtrl, "PurchaseController", "NestJS Controller · /api/purchase",
-        "POST / — buy a package (atomic)")
+    Component(purchaseCtrl, "PurchaseController", "NestJS Controller - /api/purchase",
+        "POST / - buy a package (atomic)")
 
-    Component(txCtrl, "TransactionsController", "NestJS Controller · /api/transactions",
-        "GET /me — personal history (paginated)\nGET / — all transactions (Admin)")
+    Component(txCtrl, "TransactionsController", "NestJS Controller - /api/transactions",
+        "GET /me - personal history (paginated)\nGET / - all transactions (Admin)")
 
-    Component(aiCtrl, "AiController", "NestJS Controller · /api/ai",
-        "POST /generate — image (3 credits, Pro+)\nPOST /auto-post — post (1 credit, Basic+)")
+    Component(aiCtrl, "AiController", "NestJS Controller - /api/ai",
+        "POST /generate - image (3 credits)\nPOST /auto-post - post (1 credit)")
 
-    ' ── Application Layer (Services) ─────────────────────────────────────────
+    ' Services
     Component(authSvc, "AuthService", "NestJS Service",
-        "Registration (bcrypt hash), login (bcrypt compare),\nJWT signing. Delegates persistence to UserRepository.")
-
-    Component(usersSvc, "UsersService", "NestJS Service",
-        "Fetch profile with active packages.\nAdmin: paginated user list.")
+        "bcrypt hash on register, bcrypt compare on login.\nJWT signing via JwtService.")
 
     Component(pkgSvc, "PackagesService", "NestJS Service",
-        "Package CRUD. Soft-delete enforced:\ncannot delete if active subscribers exist.")
+        "Package CRUD via IPackageRepository.\nSoft-delete enforced via countActiveSubscribers.")
 
     Component(purchaseSvc, "PurchaseService", "NestJS Service",
-        "Orchestrates purchase inside Prisma $transaction:\n1. Validate package exists + user hasn't bought it.\n2. Increment user.currentCredits.\n3. Create UserPackage record.\n4. Create CREDIT_IN Transaction via TransactionFactory.")
+        "Orchestrates purchase inside Prisma transaction:\nvalidate, increment credits, create UserPackage,\nlog CREDIT_IN via TransactionFactory.")
 
     Component(txSvc, "TransactionsService", "NestJS Service",
-        "Paginated transaction history per user or global.\nDelegates to TransactionRepository.")
+        "Paginated transaction history.\nDelegates to ITransactionRepository.")
 
-    Component(aiSvc, "AiService", "NestJS Service",
-        "Simulates external AI calls with deliberate latency.\nOnly reached after RequireFeatureGuard passes.")
-
-    ' ── Domain Layer ─────────────────────────────────────────────────────────
+    ' Domain
     Component(txFactory, "TransactionFactory", "Factory Pattern",
-        "Single responsibility: builds a CreateTransactionDto\nwith computed balanceBefore, balanceAfter, description,\nand a deterministic referenceId for idempotency.")
+        "Builds CreateTransactionInput with computed\nbalanceBefore, balanceAfter, and referenceId.")
 
-    Component(creditStrategy, "CreditDeductionStrategy", "Strategy Pattern",
-        "Encapsulates the credit-deduction algorithm.\nInterface: execute(userId, cost, tx): Promise<User>.\nCan be swapped for PostpaidStrategy or FreeTrialStrategy\nwithout touching the guard.")
+    Component(creditStrategy, "PrepaidDeductionStrategy", "Strategy Pattern",
+        "Deducts credits before AI action executes.\nCan be swapped without touching the guard.")
 
-    ' ── Infrastructure Layer (Repositories) ──────────────────────────────────
+    ' Repositories
     Component(userRepo, "UserRepository", "Repository Pattern",
-        "Implements IUserRepository interface.\nAll Prisma user queries go through here.\nInjected via DI token for easy mocking in tests.")
+        "Implements IUserRepository.\nAll user Prisma queries go through here.")
 
     Component(pkgRepo, "PackageRepository", "Repository Pattern",
-        "Implements IPackageRepository interface.\nHandles package + package_features queries.")
+        "Implements IPackageRepository.\nHandles package and package_features queries.")
 
     Component(txRepo, "TransactionRepository", "Repository Pattern",
-        "Implements ITransactionRepository interface.\nHandles all transaction read/write operations.")
+        "Implements ITransactionRepository.\nHandles transaction read/write operations.")
 
     Component(prisma, "PrismaService", "Prisma Client",
-        "Global singleton. Wraps PrismaClient.\n$transaction() used for all multi-step DB operations.\nConnects/disconnects on module lifecycle hooks.")
+        "Global singleton wrapping PrismaClient.\nProvides transaction() for atomic operations.")
 }
 
-' ── Relationships — Middleware / Cross-cutting ──────────────────────────────
-Rel(spa, correlationMw, "All HTTP requests pass through", "")
+' Cross-cutting
+Rel(spa, correlationMw, "All requests pass through", "")
 Rel(correlationMw, logInterceptor, "Enriches log context", "")
 Rel(logInterceptor, winstonLogger, "Writes structured logs", "")
-Rel(exFilter, winstonLogger, "Logs errors", "")
+Rel(exFilter, winstonLogger, "Logs 5xx errors", "")
 
-' ── Auth flow ────────────────────────────────────────────────────────────────
+' Auth
 Rel(authCtrl, authSvc, "Delegates")
 Rel(authSvc, userRepo, "findByEmail, create")
-Rel(authSvc, winstonLogger, "Logs auth events")
 
-' ── Users ────────────────────────────────────────────────────────────────────
-Rel(usersCtrl, usersSvc, "Delegates")
-Rel(usersSvc, userRepo, "findWithPackages")
+' Users
+Rel(usersCtrl, userRepo, "findWithPackages")
 
-' ── Packages ─────────────────────────────────────────────────────────────────
+' Packages
 Rel(pkgCtrl, pkgSvc, "Delegates")
 Rel(pkgSvc, pkgRepo, "CRUD operations")
 
-' ── Purchase (ACID) ──────────────────────────────────────────────────────────
+' Purchase
 Rel(purchaseCtrl, purchaseSvc, "Delegates")
-Rel(purchaseSvc, txFactory, "Builds transaction record")
+Rel(purchaseSvc, txFactory, "Builds CREDIT_IN record")
 Rel(purchaseSvc, userRepo, "incrementCredits")
-Rel(purchaseSvc, txRepo, "create CREDIT_IN")
-Rel(purchaseSvc, winstonLogger, "Logs purchase event")
+Rel(purchaseSvc, txRepo, "create transaction")
 
-' ── RBAC Guard ───────────────────────────────────────────────────────────────
+' RBAC Guard
 Rel(rfGuard, creditStrategy, "Executes deduction")
-Rel(rfGuard, txFactory, "Builds CREDIT_OUT record")
 Rel(rfGuard, pkgRepo, "checkFeatureAccess")
-Rel(rfGuard, txRepo, "create CREDIT_OUT")
-Rel(rfGuard, winstonLogger, "Logs credit deductions")
+Rel(creditStrategy, txFactory, "Builds CREDIT_OUT record")
+Rel(creditStrategy, userRepo, "decrementCredits")
+Rel(creditStrategy, txRepo, "create transaction")
 
-' ── Transactions ─────────────────────────────────────────────────────────────
+' Transactions
 Rel(txCtrl, txSvc, "Delegates")
 Rel(txSvc, txRepo, "paginate")
 
-' ── AI ───────────────────────────────────────────────────────────────────────
-Rel(aiCtrl, aiSvc, "Delegates (post-guard)")
+' AI
+Rel(aiCtrl, rfGuard, "Guarded by")
 
-' ── Repositories → Prisma ────────────────────────────────────────────────────
+' Repositories -> Prisma
 Rel(userRepo, prisma, "Uses")
 Rel(pkgRepo, prisma, "Uses")
 Rel(txRepo, prisma, "Uses")

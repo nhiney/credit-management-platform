@@ -3,7 +3,7 @@
 
 LAYOUT_WITH_LEGEND()
 
-title [C4 — Level 2] Container Diagram: CreditFlow Platform
+title [C4 - Level 2] Container Diagram: CreditFlow Platform
 
 Person(endUser, "End User", "")
 Person(admin, "Platform Admin", "")
@@ -13,11 +13,11 @@ System_Boundary(platform, "CreditFlow Platform") {
     Container(nginx, "Nginx", "Nginx Alpine",
         "Reverse proxy and static file server.\nServes the React SPA and routes\nall /api/* requests to the backend.")
 
-    Container(spa, "React SPA", "React 18 · Vite 5 · TailwindCSS",
-        "Single-page application.\nProvides Dashboard (credit balance +\ntransaction history) and Package Store.\nCommunicates via Axios with JWT auth.")
+    Container(spa, "React SPA", "React 18, Vite 5, TailwindCSS",
+        "Single-page application.\nProvides Dashboard (credit balance,\ntransaction history) and Package Store.\nCommunicates via Axios with JWT auth.")
 
-    Container(api, "NestJS API", "NestJS 10 · TypeScript · Passport JWT",
-        "RESTful API built on Clean Architecture.\n— Helmet + CORS + Rate Limiting (security)\n— Winston structured JSON logging + Correlation IDs\n— ACID credit transactions via Prisma $transaction\n— Custom RBAC guard: RequireFeatureGuard\n— Repository + Factory + Strategy patterns")
+    Container(api, "NestJS API", "NestJS 10, TypeScript, Passport JWT",
+        "RESTful API built on Clean Architecture.\n- Helmet, CORS, Rate Limiting (security)\n- Winston structured JSON logging + Correlation IDs\n- ACID credit transactions via Prisma transaction\n- Custom RBAC guard: RequireFeatureGuard\n- Repository, Factory, Strategy patterns")
 
     ContainerDb(db, "PostgreSQL 16", "PostgreSQL",
         "Primary relational data store.\nHolds users, packages, features,\ntransactions, and user-package\nsubscriptions with full audit trail.")
@@ -26,14 +26,13 @@ System_Boundary(platform, "CreditFlow Platform") {
 System_Ext(aiProvider, "AI Provider (Mock)", "")
 System_Ext(emailService, "Email Service", "")
 
-' ── Relationships ────────────────────────────────────────────────────────────
 Rel(endUser, nginx, "Uses", "HTTPS :5173")
 Rel(admin, nginx, "Uses", "HTTPS :5173")
 Rel(nginx, spa, "Serves static files", "")
-Rel(spa, nginx, "API requests", "HTTPS /api/*")
+Rel(spa, api, "API requests", "HTTPS /api/*")
 Rel(nginx, api, "Proxies /api/*", "HTTP :3000")
-Rel(api, db, "Reads / Writes", "Prisma ORM · TCP :5432")
-Rel(api, aiProvider, "Delegates AI tasks\npost credit-check", "HTTPS")
+Rel(api, db, "Reads / Writes", "Prisma ORM, TCP :5432")
+Rel(api, aiProvider, "Delegates AI tasks post credit-check", "HTTPS")
 Rel(api, emailService, "Sends notifications", "SMTP")
 
 @enduml
