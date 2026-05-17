@@ -1,0 +1,79 @@
+@startuml Sequence_CreditDeduction
+title Sequence: Credit-Gated Feature Access (RequireFeatureGuard)
+
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 8
+skinparam sequenceBoxBorderColor #666
+
+actor "End User" as User
+participant "AiController\n/api/ai/generate" as Ctrl
+participant "JwtAuthGuard" as JWT
+participant "RequireFeatureGuard" as Guard
+participant "PackageRepository" as PkgRepo
+participant "CreditDeductionStrategy" as Strategy
+participant "TransactionFactory" as Factory
+participant "TransactionRepository" as TxRepo
+participant "Prisma $transaction" as TX
+participant "WinstonLogger" as Logger
+participant "AiService" as AI
+database "PostgreSQL" as DB
+
+User -> Ctrl : POST /api/ai/generate\nAuthorization: Bearer <token>
+
+' ── JWT Auth ──────────────────────────────────────────────────────────
+Ctrl -> JWT : canActivate()
+JWT -> DB : SELECT * FROM users WHERE id = payload.sub
+DB --> JWT : User record
+JWT --> Ctrl : Attach req.user ✓
+
+' ── RBAC Feature Guard ────────────────────────────────────────────────
+Ctrl -> Guard : canActivate()
+note over Guard : Read @RequireFeature('generate_image') metadata
+
+Guard -> PkgRepo : findActivePackageWithFeature(userId, 'generate_image')
+PkgRepo -> DB : SELECT user_packages JOIN package_features\nWHERE userId = ? AND status = ACTIVE\nAND feature.code_name = 'generate_image'
+DB --> PkgRepo : UserPackage or null
+
+alt No active plan with feature
+    Guard --> Ctrl : throw ForbiddenException (403)\n"Your plan does not include generate_image"
+    Ctrl --> User : 403 Forbidden
+end
+
+Guard -> Guard : Check user.currentCredits >= feature.creditCost (3)
+
+alt Insufficient credits
+    Guard --> Ctrl : throw UnprocessableEntityException (422)\n"Insufficient credits: need 3, have N"
+    Ctrl --> User : 422 Unprocessable Entity
+end
+
+' ── Atomic Deduction ──────────────────────────────────────────────────
+Guard -> TX : prisma.$transaction(async (tx) => {...})
+activate TX #LightYellow
+
+TX -> Strategy : execute(userId, creditCost=3, tx)
+Strategy -> DB : UPDATE users SET current_credits -= 3\nWHERE id = ? RETURNING current_credits
+DB --> Strategy : updatedUser (newBalance)
+
+Strategy -> Factory : build(userId, featureId, amount=3,\ntype=CREDIT_OUT, balanceBefore, balanceAfter)
+Factory --> Strategy : TransactionCreateInput
+
+Strategy -> TxRepo : create(transactionData, tx)
+TxRepo -> DB : INSERT INTO transactions (...) VALUES (...)
+DB --> TxRepo : Transaction record
+
+Strategy --> TX : updatedUser
+deactivate TX
+
+TX --> Guard : { newCredits: N-3, transaction }
+
+Guard -> Logger : log('credit.deducted', { userId, feature,\namount: 3, correlationId, newBalance })
+
+Guard --> Ctrl : return true ✓
+
+' ── AI Execution ──────────────────────────────────────────────────────
+Ctrl -> AI : generateImage(prompt, userId)
+AI --> Ctrl : { imageUrl, model, generatedAt }
+
+Ctrl --> User : 201 Created\n{ imageUrl, ... }
+
+@enduml
