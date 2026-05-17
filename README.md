@@ -1,6 +1,6 @@
 # CreditFlow — Credit Management Platform
 
-A full-stack SaaS credit management system built with NestJS, React, and PostgreSQL. Users purchase credit packages to unlock and consume AI-powered features, with every transaction recorded atomically and an RBAC guard enforcing both plan-tier and credit-balance checks before granting feature access.
+An enterprise-grade SaaS credit management system built with Clean Architecture, SOLID principles, and production-ready infrastructure. Users purchase credit packages to unlock and consume AI-powered features, with every transaction recorded atomically and a feature guard enforcing both plan-tier and credit-balance checks before granting access.
 
 ---
 
@@ -32,33 +32,48 @@ A full-stack SaaS credit management system built with NestJS, React, and Postgre
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Backend flow for a credit-gated AI request:**
+The backend follows **Clean Architecture** with strict layer separation:
+
+```
+Presentation  →  controllers, guards, interceptors, filters
+Application   →  services, use-cases
+Domain        →  entities, value objects, interfaces, factories, strategies
+Infrastructure → repositories (Prisma), loggers (Winston), strategies
+```
+
+Design patterns applied:
+- **Repository Pattern** — `IUserRepository`, `IPackageRepository`, `ITransactionRepository` with Symbol-based DI tokens; all services depend on interfaces, not Prisma directly
+- **Factory Pattern** — `TransactionFactory.build()` is the single source for creating ledger entries (computes `balanceBefore`/`balanceAfter`, generates idempotent `referenceId`)
+- **Strategy Pattern** — `ICreditDeductionStrategy` / `PrepaidDeductionStrategy` decouples the deduction algorithm from the guard
+
+**Credit-gated request flow:**
 
 ```
 Request
   │
-  ├─▶ JwtAuthGuard        → validate Bearer token
-  │
-  ├─▶ RequireFeatureGuard → (1) check user has active plan with feature
-  │                         (2) check currentCredits >= feature.creditCost
-  │                         (3) $transaction: deduct credits + log CREDIT_OUT
-  │
-  └─▶ AiController        → execute AI action, return result
+  ├─▶ CorrelationIdMiddleware → attach UUID to req + X-Correlation-ID header
+  ├─▶ JwtAuthGuard           → validate Bearer token
+  ├─▶ RequireFeatureGuard    → check plan tier + credits → atomic deduction
+  └─▶ AiController           → execute AI action, return result
 ```
+
+C4 architecture diagrams are in [`docs/`](./docs/) (PlantUML — Context, Container, Component, Sequence).
 
 ---
 
 ## Tech Stack
 
-| Layer       | Technology                                          |
-|-------------|-----------------------------------------------------|
-| Backend     | NestJS 10 · TypeScript · Passport JWT               |
-| ORM         | Prisma 5 (type-safe queries, schema migrations)     |
-| Database    | PostgreSQL 16                                       |
-| Frontend    | React 18 · Vite 5 · TailwindCSS 3 · react-router v6|
-| UI Library  | Shadcn/ui · Radix UI · Lucide Icons                 |
-| DevOps      | Docker · Docker Compose · Nginx (SPA serving)       |
-| API Docs    | Swagger / OpenAPI 3 (auto-generated)                |
+| Layer | Technology |
+|---|---|
+| Backend | NestJS 10, TypeScript, Passport JWT |
+| ORM | Prisma 5 (type-safe queries, schema migrations) |
+| Database | PostgreSQL 16 |
+| Frontend | React 18, Vite 5, TailwindCSS 3, react-router v6 |
+| Logging | Winston (structured JSON in prod, colorized in dev) |
+| Testing | Jest + ts-jest — 53 unit tests, mocked repositories |
+| Git Hooks | Husky v9, lint-staged (ESLint + Prettier), commitlint |
+| DevOps | Docker Compose, multi-stage builds, Nginx (SPA) |
+| API Docs | Swagger / OpenAPI 3 (auto-generated) |
 
 ---
 
@@ -160,51 +175,73 @@ All protected endpoints require a Bearer JWT token. Use the **Authorize** button
 credit-management-platform/
 ├── docker-compose.yml
 ├── .env.example
+├── docs/                       ← C4 PlantUML diagrams
 │
 ├── backend/
 │   ├── Dockerfile
-│   ├── nest-cli.json
-│   ├── tsconfig.json
-│   ├── package.json
 │   ├── prisma/
 │   │   ├── schema.prisma       ← single source of truth for DB schema
 │   │   └── seed.ts             ← default packages, features, test users
 │   └── src/
-│       ├── main.ts             ← bootstrap, Swagger, global pipes
-│       ├── app.module.ts       ← root module, global JWT guard
-│       ├── prisma/             ← global PrismaService (@Global)
+│       ├── main.ts             ← bootstrap, Winston logger, Swagger, global pipes
+│       ├── app.module.ts       ← root module, global JWT + Throttler guards
+│       ├── prisma/             ← @Global() PrismaService
+│       ├── domain/
+│       │   ├── entities/       ← UserEntity, PackageEntity, FeatureEntity, TransactionEntity
+│       │   ├── value-objects/  ← CreditAmount (immutable), Email (normalized)
+│       │   ├── exceptions/     ← InsufficientCreditsException, InvalidPackageException
+│       │   ├── factories/      ← TransactionFactory.build() — audit trail
+│       │   ├── interfaces/     ← IUserRepository, IPackageRepository, ITransactionRepository
+│       │   └── strategies/     ← ICreditDeductionStrategy interface
+│       ├── infrastructure/
+│       │   ├── database/
+│       │   │   ├── repositories/ ← Prisma implementations of repo interfaces
+│       │   │   └── strategies/   ← PrepaidDeductionStrategy
+│       │   └── logger/         ← Winston options (dev: colorized, prod: JSON)
 │       ├── common/
+│       │   ├── constants/      ← INJECTION_TOKENS (Symbol-based DI)
 │       │   ├── decorators/     ← @CurrentUser, @Public, @Roles, @RequireFeature
-│       │   ├── filters/        ← HttpExceptionFilter (standardized errors)
-│       │   └── guards/         ← JwtAuthGuard, RolesGuard, RequireFeatureGuard
-│       └── modules/
-│           ├── auth/           ← register, login, JWT strategy
-│           ├── users/          ← profile, admin user list
-│           ├── packages/       ← CRUD with soft-delete
-│           ├── purchase/       ← atomic purchase with $transaction
-│           ├── transactions/   ← paginated history
-│           └── ai/             ← credit-gated feature endpoints
+│       │   ├── filters/        ← HttpExceptionFilter (standardized error envelope)
+│       │   ├── guards/         ← JwtAuthGuard, RolesGuard, RequireFeatureGuard
+│       │   ├── interceptors/   ← LoggingInterceptor (method, URL, duration, correlationId)
+│       │   └── middlewares/    ← CorrelationIdMiddleware (UUID v4 per request)
+│       ├── modules/
+│       │   ├── auth/           ← register, login, JWT strategy
+│       │   ├── users/          ← profile, admin user list (paginated)
+│       │   ├── packages/       ← CRUD with soft-delete via IPackageRepository
+│       │   ├── purchase/       ← atomic purchase with $transaction
+│       │   ├── transactions/   ← paginated history via ITransactionRepository
+│       │   └── ai/             ← credit-gated feature endpoints + PrepaidDeductionStrategy
+│       └── __tests__/          ← 53 unit tests (no DB required)
 │
 └── frontend/
     ├── Dockerfile + nginx.conf
-    ├── vite.config.ts
-    ├── tailwind.config.js
     └── src/
-        ├── main.tsx            ← React root, Toaster
-        ├── App.tsx             ← routing, protected routes
-        ├── lib/
-        │   ├── api.ts          ← axios instance, JWT interceptor, 401 redirect
-        │   └── utils.ts        ← cn() helper
-        ├── hooks/
-        │   └── useAuth.ts      ← login, register, logout, refreshUser
+        ├── lib/api.ts          ← axios + JWT interceptor + 401 redirect
+        ├── hooks/useAuth.ts    ← login, register, logout, refreshUser
         ├── types/index.ts      ← shared TypeScript interfaces
-        ├── components/
-        │   └── layout/Navbar.tsx
         └── pages/
-            ├── Login.tsx       ← sign in / sign up with demo account hint
-            ├── Dashboard.tsx   ← credit balance, active packages, tx history
-            └── PackageStore.tsx← package cards with feature list + Buy Now
+            ├── Login.tsx       ← sign in / sign up
+            ├── Dashboard.tsx   ← credit balance, packages, paginated tx history
+            └── PackageStore.tsx← package cards with feature list + purchase flow
 ```
+
+### Testing
+
+```bash
+cd backend
+
+# Run all 53 unit tests (no database needed)
+npm run test:unit
+
+# Watch mode
+npm run test:watch
+
+# Coverage report
+npm run test:coverage
+```
+
+Tests cover: `TransactionFactory`, `AuthService`, `PurchaseService`, `RequireFeatureGuard`, `CreditAmount` value object, `UserEntity` domain entity.
 
 ---
 
