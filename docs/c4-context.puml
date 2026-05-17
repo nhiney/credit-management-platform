@@ -1,9 +1,9 @@
 @startuml C4_Context
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include <C4/C4_Context.puml>
 
 LAYOUT_WITH_LEGEND()
 
-title [C4 — Level 1] System Context: CreditFlow Platform
+title [C4 - Level 1] System Context: CreditFlow Platform
 
 ' ── Actors ───────────────────────────────────────────────────────────────────
 Person(endUser, "End User", "A SaaS customer who purchases\ncredit packages and consumes\nAI-powered features.")

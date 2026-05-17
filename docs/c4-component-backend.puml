@@ -1,5 +1,5 @@
 @startuml C4_Component_Backend
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+!include <C4/C4_Component.puml>
 
 LAYOUT_WITH_LEGEND()
 
