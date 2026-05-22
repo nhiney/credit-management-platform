@@ -64,3 +64,32 @@ export interface AuthResponse {
   user: User;
   accessToken: string;
 }
+
+export interface AdminTransaction extends Transaction {
+  user?: { id: string; email: string };
+}
+
+export interface GenerateImageResult {
+  success: boolean;
+  prompt: string;
+  imageUrl: string;
+  model: string;
+  generatedAt: string;
+}
+
+export interface AutoPostResult {
+  success: boolean;
+  postId: string;
+  content: string;
+  scheduledAt: string;
+  platforms: string[];
+}
+
+export interface AnalyzeDataResult {
+  success: boolean;
+  summary: string;
+  insights: string[];
+  sentiment: string;
+  confidence: number;
+  analyzedAt: string;
+}
