@@ -24,6 +24,18 @@ export class PackageRepository implements IPackageRepository {
     }) as Promise<PackageWithFeatures[]>;
   }
 
+  async findAllAdmin(): Promise<PackageWithFeatures[]> {
+    return this.prisma.package.findMany({
+      where: { deletedAt: null },
+      include: PACKAGE_INCLUDE,
+      orderBy: { price: 'asc' },
+    }) as Promise<PackageWithFeatures[]>;
+  }
+
+  async findAllFeatures(): Promise<import('@prisma/client').Feature[]> {
+    return this.prisma.feature.findMany({ orderBy: { codeName: 'asc' } });
+  }
+
   async findById(id: string): Promise<PackageWithFeatures | null> {
     return this.prisma.package.findFirst({
       where: { id, deletedAt: null },

@@ -17,6 +17,14 @@ export class PackagesService {
     return this.packageRepo.findAll();
   }
 
+  async findAllAdmin() {
+    return this.packageRepo.findAllAdmin();
+  }
+
+  async findAllFeatures() {
+    return this.packageRepo.findAllFeatures();
+  }
+
   async findOne(id: string) {
     const pkg = await this.packageRepo.findById(id);
     if (!pkg) throw new NotFoundException(`Package with id '${id}' not found`);

@@ -15,6 +15,8 @@ export interface CreatePackageInput {
 
 export interface IPackageRepository {
   findAll(): Promise<PackageWithFeatures[]>;
+  findAllAdmin(): Promise<PackageWithFeatures[]>;
+  findAllFeatures(): Promise<Feature[]>;
   findById(id: string): Promise<PackageWithFeatures | null>;
   findActiveById(id: string): Promise<PackageWithFeatures | null>;
   create(data: CreatePackageInput): Promise<PackageWithFeatures>;
