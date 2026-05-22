@@ -75,6 +75,8 @@ const mockPackageRepo: jest.Mocked<IPackageRepository> = {
   countActiveSubscribers: jest.fn(),
   findUserActivePackageWithFeature: jest.fn(),
   findUserActivePackage: jest.fn(),
+  findAllAdmin: jest.fn(),
+  findAllFeatures: jest.fn(),
 };
 
 const mockTxRepo: jest.Mocked<ITransactionRepository> = {

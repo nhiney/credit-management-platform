@@ -1,0 +1,70 @@
+@startuml sequence-admin-package-management
+title Sequence: Admin Manages Credit Packages (CRUD)
+
+actor       Admin        as A
+participant "React SPA"  as SPA  #LightBlue
+participant "NestJS API"  as API  #LightGreen
+participant "JwtAuthGuard\n+RolesGuard" as GUARD #LightYellow
+database    "PostgreSQL"  as DB   #LightSalmon
+
+== Load Admin Packages page ==
+
+A   -> SPA : Navigate to /admin/packages
+SPA -> API : GET /api/packages/admin/all\n[Bearer token, role=ADMIN]
+API -> GUARD: validate JWT + ADMIN role
+GUARD --> API: authorized
+API -> DB  : SELECT packages WHERE deleted_at IS NULL
+DB --> API : Package[]
+SPA -> API : GET /api/packages/features\n[Bearer token, role=ADMIN]
+API -> DB  : SELECT features ORDER BY code_name
+DB --> API : Feature[]
+API --> SPA : packages + features
+SPA --> A  : Render table + "New Package" button
+
+== Create Package ==
+
+A   -> SPA : Click "New Package" → fill form\n(name, price, credits, features)
+A   -> SPA : Click "Create Package"
+SPA -> API : POST /api/packages\n{ name, price, creditAmount, featureIds[] }
+API -> GUARD: validate JWT + ADMIN role
+GUARD --> API: authorized
+API -> DB  : INSERT INTO packages (...)
+API -> DB  : INSERT INTO package_features (packageId, featureId) x N
+DB --> API : PackageWithFeatures
+API --> SPA : 201 Created
+SPA --> A  : Close modal, refresh table, Toast success
+
+== Edit Package ==
+
+A   -> SPA : Click "Edit" on a row
+SPA --> A  : Open modal pre-filled
+A   -> SPA : Modify fields → "Save Changes"
+SPA -> API : PATCH /api/packages/:id\n{ name?, price?, featureIds? }
+API -> GUARD: validate JWT + ADMIN role
+GUARD --> API: authorized
+API -> DB  : UPDATE packages SET ... WHERE id=?
+API -> DB  : DELETE package_features WHERE packageId=?\nINSERT package_features (new set)
+DB --> API : Updated PackageWithFeatures
+API --> SPA : 200 OK
+SPA --> A  : Close modal, refresh table, Toast success
+
+== Delete Package ==
+
+A   -> SPA : Click "Delete" → "Sure? Yes"
+SPA -> API : DELETE /api/packages/:id
+API -> GUARD: validate JWT + ADMIN role
+GUARD --> API: authorized
+API -> DB  : SELECT COUNT(*) FROM user_packages\nWHERE package_id=? AND status='ACTIVE'
+alt Active subscribers exist
+    DB --> API : count > 0
+    API --> SPA : 409 Conflict\n"Cannot delete — N user(s) active"
+    SPA --> A  : Toast error
+else No active subscribers
+    DB --> API : 0
+    API -> DB  : UPDATE packages SET deleted_at=NOW(), is_active=false
+    DB --> API : OK
+    API --> SPA : 200 { message: "Package deleted successfully" }
+    SPA --> A  : Remove row, Toast success
+end
+
+@enduml

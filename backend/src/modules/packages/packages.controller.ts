@@ -9,12 +9,7 @@ import {
   ParseUUIDPipe,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiBearerAuth,
-  ApiResponse,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { PackagesService } from './packages.service';
 import { CreatePackageDto } from './dto/create-package.dto';
@@ -34,6 +29,22 @@ export class PackagesController {
   @ApiOperation({ summary: 'List all active packages (public)' })
   findAll() {
     return this.packagesService.findAll();
+  }
+
+  @Get('admin/all')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'List all packages including inactive (Admin only)' })
+  findAllAdmin() {
+    return this.packagesService.findAllAdmin();
+  }
+
+  @Get('features')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'List all available features (Admin only)' })
+  findAllFeatures() {
+    return this.packagesService.findAllFeatures();
   }
 
   @Get(':id')
@@ -58,10 +69,7 @@ export class PackagesController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Update a package (Admin only)' })
-  update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdatePackageDto,
-  ) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePackageDto) {
     return this.packagesService.update(id, dto);
   }
 
