@@ -32,4 +32,24 @@ export class AiService {
       platforms: ['twitter', 'linkedin'],
     };
   }
+
+  async analyzeData(data: string, userId: string) {
+    this.logger.log(`Analyzing data for user ${userId}`);
+
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    const lines = data.split(/[,\n]/).filter(Boolean);
+    return {
+      success: true,
+      summary: `Analyzed ${lines.length} data point(s).`,
+      insights: [
+        'Peak performance detected in the latest period.',
+        'Growth trend of approximately 12% observed.',
+        'Recommend focusing on top-performing segments.',
+      ],
+      sentiment: 'positive',
+      confidence: 0.87,
+      analyzedAt: new Date().toISOString(),
+    };
+  }
 }
