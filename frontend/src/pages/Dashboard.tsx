@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Zap, TrendingUp, TrendingDown, RefreshCw, Loader2 } from 'lucide-react';
+import { Zap, TrendingUp, TrendingDown, RefreshCw, Loader2, XCircle, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import type { User, Transaction, PaginatedResponse } from '@/types';
@@ -38,6 +38,8 @@ export default function DashboardPage({ onCreditRefresh }: DashboardProps) {
   const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
   const fetchData = useCallback(async (page = 1) => {
     try {
@@ -58,6 +60,23 @@ export default function DashboardPage({ onCreditRefresh }: DashboardProps) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleCancel = async (packageId: string) => {
+    setCancellingId(packageId);
+    try {
+      await api.delete(`/purchase/${packageId}`);
+      toast.success('Package cancelled successfully');
+      setConfirmCancelId(null);
+      await Promise.all([onCreditRefresh(), fetchData()]);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Cancellation failed';
+      toast.error(Array.isArray(msg) ? msg[0] : msg);
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -120,9 +139,7 @@ export default function DashboardPage({ onCreditRefresh }: DashboardProps) {
             <Zap className="h-4 w-4 text-blue-500" />
             Active Packages
           </div>
-          <p className="text-4xl font-bold text-slate-900">
-            {profile?.userPackages?.length ?? 0}
-          </p>
+          <p className="text-4xl font-bold text-slate-900">{profile?.userPackages?.length ?? 0}</p>
           <p className="mt-1 text-sm text-slate-400">subscriptions</p>
         </div>
       </div>
@@ -131,16 +148,60 @@ export default function DashboardPage({ onCreditRefresh }: DashboardProps) {
       {profile?.userPackages && profile.userPackages.length > 0 && (
         <div className="mb-8">
           <h2 className="mb-4 text-lg font-semibold text-slate-900">Active Packages</h2>
-          <div className="flex flex-wrap gap-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {profile.userPackages.map((up) => (
               <div
                 key={up.id}
-                className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"
+                className="flex flex-col rounded-xl border border-blue-100 bg-blue-50 p-4"
               >
-                <p className="font-semibold text-blue-900">{up.package.name}</p>
-                <p className="text-xs text-blue-600">
-                  {up.package.packageFeatures.map((pf) => pf.feature.codeName).join(' · ')}
-                </p>
+                {/* Package info */}
+                <div className="mb-3 flex-1">
+                  <p className="font-semibold text-blue-900">{up.package.name}</p>
+                  <p className="mt-1 text-xs text-blue-600">
+                    {up.package.packageFeatures.map((pf) => pf.feature.codeName).join(' · ')}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Since{' '}
+                    {new Date(up.purchasedAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </p>
+                </div>
+
+                {/* Cancel action */}
+                {confirmCancelId === up.package.id ? (
+                  <div className="flex items-center gap-2 border-t border-blue-200 pt-3">
+                    <p className="flex-1 text-xs text-slate-600">Cancel this package?</p>
+                    <button
+                      onClick={() => handleCancel(up.package.id)}
+                      disabled={cancellingId === up.package.id}
+                      className="flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-500 transition disabled:opacity-60"
+                    >
+                      {cancellingId === up.package.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Check className="h-3 w-3" />
+                      )}
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setConfirmCancelId(null)}
+                      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmCancelId(up.package.id)}
+                    className="mt-2 flex items-center gap-1.5 self-start rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                    Cancel Package
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -176,22 +237,31 @@ export default function DashboardPage({ onCreditRefresh }: DashboardProps) {
                   return (
                     <tr key={tx.id} className="transition hover:bg-slate-50">
                       <td className="px-6 py-4">
-                        <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium', cfg.className)}>
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
+                            cfg.className,
+                          )}
+                        >
                           <Icon className="h-3 w-3" />
                           {cfg.label}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-slate-700">
-                        {tx.description ?? (tx.feature?.codeName ?? tx.package?.name ?? '—')}
+                        {tx.description ?? tx.feature?.codeName ?? tx.package?.name ?? '—'}
                       </td>
                       <td className={cn('px-6 py-4 font-semibold tabular-nums', cfg.amountClass)}>
-                        {cfg.prefix}{tx.amount}
+                        {cfg.prefix}
+                        {tx.amount}
                       </td>
-                      <td className="px-6 py-4 tabular-nums text-slate-700">
-                        {tx.balanceAfter}
-                      </td>
+                      <td className="px-6 py-4 tabular-nums text-slate-700">{tx.balanceAfter}</td>
                       <td className="px-6 py-4">
-                        <span className={cn('rounded-full px-2.5 py-1 text-xs font-medium', STATUS_CLASS[tx.status])}>
+                        <span
+                          className={cn(
+                            'rounded-full px-2.5 py-1 text-xs font-medium',
+                            STATUS_CLASS[tx.status],
+                          )}
+                        >
                           {tx.status}
                         </span>
                       </td>
@@ -212,7 +282,9 @@ export default function DashboardPage({ onCreditRefresh }: DashboardProps) {
             {/* Pagination */}
             {meta.totalPages > 1 && (
               <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 text-sm text-slate-500">
-                <span>Page {meta.page} of {meta.totalPages} · {meta.total} total</span>
+                <span>
+                  Page {meta.page} of {meta.totalPages} · {meta.total} total
+                </span>
                 <div className="flex gap-2">
                   {meta.page > 1 && (
                     <button

@@ -85,6 +85,10 @@ const mockTxRepo: jest.Mocked<ITransactionRepository> = {
 
 const mockPrisma = {
   $transaction: jest.fn(),
+  userPackage: {
+    findFirst: jest.fn(),
+    update: jest.fn(),
+  },
 };
 
 // ── Test suite ────────────────────────────────────────────────────────────────
@@ -170,6 +174,50 @@ describe('PurchaseService', () => {
       await expect(
         service.purchasePackage(mockUser.id, { packageId: mockPackage.id }),
       ).rejects.toThrow('DB error');
+    });
+  });
+
+  describe('cancelPackage()', () => {
+    const mockUserPackage = {
+      id: 'up-001',
+      userId: mockUser.id,
+      packageId: mockPackage.id,
+      status: 'ACTIVE' as const,
+      purchasedAt: new Date(),
+      expiresAt: null,
+      package: mockPackage,
+    };
+
+    it('should throw NotFoundException when no active subscription exists', async () => {
+      mockPrisma.userPackage.findFirst.mockResolvedValue(null);
+
+      await expect(service.cancelPackage(mockUser.id, mockPackage.id)).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(mockPrisma.userPackage.update).not.toHaveBeenCalled();
+    });
+
+    it('should set status to CANCELLED when active subscription exists', async () => {
+      mockPrisma.userPackage.findFirst.mockResolvedValue(mockUserPackage);
+      mockPrisma.userPackage.update.mockResolvedValue({ ...mockUserPackage, status: 'CANCELLED' });
+
+      const result = await service.cancelPackage(mockUser.id, mockPackage.id);
+
+      expect(mockPrisma.userPackage.update).toHaveBeenCalledWith({
+        where: { id: mockUserPackage.id },
+        data: { status: 'CANCELLED' },
+      });
+      expect(result.message).toContain(mockPackage.name);
+    });
+
+    it('should return success message with package name', async () => {
+      mockPrisma.userPackage.findFirst.mockResolvedValue(mockUserPackage);
+      mockPrisma.userPackage.update.mockResolvedValue({ ...mockUserPackage, status: 'CANCELLED' });
+
+      const result = await service.cancelPackage(mockUser.id, mockPackage.id);
+
+      expect(result).toEqual({ message: `Successfully cancelled the ${mockPackage.name} package` });
     });
   });
 });
