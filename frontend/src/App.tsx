@@ -3,11 +3,23 @@ import { useAuth } from '@/hooks/useAuth';
 import LoginPage from '@/pages/Login';
 import DashboardPage from '@/pages/Dashboard';
 import PackageStorePage from '@/pages/PackageStore';
+import FeaturesPage from '@/pages/Features';
+import AdminDashboard from '@/pages/admin/AdminDashboard';
+import AdminPackagesPage from '@/pages/admin/AdminPackages';
+import AdminUsers from '@/pages/admin/AdminUsers';
+import AdminTransactions from '@/pages/admin/AdminTransactions';
 import Navbar from '@/components/layout/Navbar';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== 'ADMIN') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
@@ -20,11 +32,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {isAuthenticated && (
-        <Navbar user={user} onLogout={logout} />
-      )}
+      {isAuthenticated && <Navbar user={user} onLogout={logout} />}
 
       <Routes>
+        {/* Auth */}
         <Route
           path="/login"
           element={
@@ -34,6 +45,7 @@ export default function App() {
           }
         />
 
+        {/* User routes */}
         <Route
           path="/dashboard"
           element={
@@ -42,13 +54,54 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/packages"
           element={
             <ProtectedRoute>
               <PackageStorePage onPurchaseSuccess={refreshUser} />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/features"
+          element={
+            <ProtectedRoute>
+              <FeaturesPage user={user} onRefreshUser={refreshUser} />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Admin routes */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminDashboard />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/packages"
+          element={
+            <AdminRoute>
+              <AdminPackagesPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute>
+              <AdminUsers />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/transactions"
+          element={
+            <AdminRoute>
+              <AdminTransactions />
+            </AdminRoute>
           }
         />
 
