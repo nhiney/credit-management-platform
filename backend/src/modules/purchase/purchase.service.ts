@@ -64,4 +64,24 @@ export class PurchaseService {
       transaction: result.transaction,
     };
   }
+
+  async cancelPackage(userId: string, packageId: string) {
+    const userPackage = await this.prisma.userPackage.findFirst({
+      where: { userId, packageId, status: UserPackageStatus.ACTIVE },
+      include: { package: true },
+    });
+
+    if (!userPackage) {
+      throw new NotFoundException('Active subscription not found');
+    }
+
+    await this.prisma.userPackage.update({
+      where: { id: userPackage.id },
+      data: { status: UserPackageStatus.CANCELLED },
+    });
+
+    this.logger.log(`User ${userId} cancelled package '${userPackage.package.name}'`);
+
+    return { message: `Successfully cancelled the ${userPackage.package.name} package` };
+  }
 }

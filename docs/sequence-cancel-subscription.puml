@@ -1,0 +1,50 @@
+@startuml sequence-cancel-subscription
+title Sequence: User Cancels Package Subscription
+
+actor       User         as U
+participant "React SPA"  as SPA  #LightBlue
+participant "NestJS API"  as API  #LightGreen
+participant "JwtAuthGuard" as JWT  #LightYellow
+database    "PostgreSQL"  as DB   #LightSalmon
+
+== User views Dashboard ==
+
+U   -> SPA : Navigate to /dashboard
+SPA -> API : GET /api/users/me\n[Authorization: Bearer <token>]
+API -> JWT : validate token
+JWT --> API : user { id, currentCredits, role }
+API -> DB  : SELECT user + active userPackages
+DB --> API : User + UserPackage[]
+API --> SPA : { email, currentCredits, userPackages: [...] }
+SPA --> U  : Render "Active Packages" cards\nwith [Cancel Package] button
+
+== User initiates cancellation ==
+
+U   -> SPA : Click "Cancel Package" on <PackageName>
+SPA --> U  : Show inline confirm: "Yes / No"
+U   -> SPA : Click "Yes"
+
+== Cancellation request ==
+
+SPA -> API : DELETE /api/purchase/:packageId\n[Authorization: Bearer <token>]
+API -> JWT : validate token
+JWT --> API : user { id }
+
+API -> DB  : SELECT user_packages\nWHERE user_id=? AND package_id=?\nAND status='ACTIVE'
+alt No active subscription found
+    DB --> API : null
+    API --> SPA : 404 Not Found\n"Active subscription not found"
+    SPA --> U  : Toast error
+else Active subscription exists
+    DB --> API : UserPackage { id, status: ACTIVE }
+    API -> DB  : UPDATE user_packages\nSET status='CANCELLED'\nWHERE id=?
+    DB --> API : Updated row
+    API --> SPA : 200 { message: "Successfully cancelled..." }
+    SPA -> API : GET /api/users/me  (refresh)
+    API -> DB  : SELECT updated user profile
+    DB --> API : Updated profile
+    API --> SPA : Updated { userPackages: [] }
+    SPA --> U  : Toast success\nRemove card from "Active Packages"\nUpdate credits in Navbar
+end
+
+@enduml

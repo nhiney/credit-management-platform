@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Delete, Param, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { PurchaseService } from './purchase.service';
 import { PurchaseDto } from './dto/purchase.dto';
@@ -19,10 +19,15 @@ export class PurchaseController {
   @ApiResponse({ status: 201, description: 'Purchase successful' })
   @ApiResponse({ status: 400, description: 'Package already owned' })
   @ApiResponse({ status: 404, description: 'Package not found' })
-  purchase(
-    @CurrentUser() user: { id: string },
-    @Body() dto: PurchaseDto,
-  ) {
+  purchase(@CurrentUser() user: { id: string }, @Body() dto: PurchaseDto) {
     return this.purchaseService.purchasePackage(user.id, dto);
+  }
+
+  @Delete(':packageId')
+  @ApiOperation({ summary: 'Cancel an active package subscription' })
+  @ApiResponse({ status: 200, description: 'Package cancelled' })
+  @ApiResponse({ status: 404, description: 'Active subscription not found' })
+  cancel(@CurrentUser() user: { id: string }, @Param('packageId') packageId: string) {
+    return this.purchaseService.cancelPackage(user.id, packageId);
   }
 }
