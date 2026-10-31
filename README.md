@@ -303,4 +303,4 @@ users ────────────────────────�
 
 ## Author
 
-**Nhi** — nhiyen.engineer@gmail.com
+**Nhi**
